@@ -195,7 +195,11 @@ function M.delete()
 
     vim.schedule(function()
       M.stop()
-      vim.fn.system("rm " .. e(session))
+      if vim.fn.has("win32") == 1 then
+        vim.fn.system("rm " .. session)
+      else
+        vim.fn.system("rm " .. e(session))
+      end
     end)
 
     vim.api.nvim_exec_autocmds("User", { pattern = "PersistedDeletePost", data = { name = session } })
