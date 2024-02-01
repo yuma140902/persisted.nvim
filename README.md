@@ -15,19 +15,19 @@
 
 <p align="center">
 <b>Persisted.nvim</b> is a simple lua plugin for working with sessions in Neovim<br>
-Forked from <a href="https://github.com/folke/persistence.nvim">Persistence.nvim</a> as active development had stopped
+(Forked from <a href="https://github.com/folke/persistence.nvim">Persistence.nvim</a>)
 </p>
 
 <!-- panvimdoc-ignore-end -->
 
 ## :sparkles: Features
 
-- Automatically saves the active session under `.local/share/nvim/sessions` on exiting Neovim
-- Supports sessions across multiple git branches
-- Supports autosaving and autoloading of sessions with allowed/ignored directories
-- Simple API to save/stop/restore/delete/list the current session(s)
-- Custom events which users can hook into for greater integration
-- Telescope extension to work with saved sessions
+- :evergreen_tree: Supports sessions across multiple git branches
+- :telescope: Telescope extension to work with saved sessions
+- :tickets: Custom events which users can hook into for tighter integration
+- :memo: Simple API to save/stop/restore/delete/list the current session(s)
+- :open_file_folder: Supports autosaving and autoloading of sessions with allowed/ignored directories
+- :floppy_disk: Automatically saves the active session under `.local/share/nvim/sessions` on exiting Neovim
 
 ## :zap: Requirements
 
@@ -46,6 +46,8 @@ Install the plugin with your preferred package manager:
   config = true
 }
 ```
+
+> **Note**: The `lazy = true` option may be useful if you use a dashboard
 
 **[Packer](https://github.com/wbthomason/packer.nvim)**
 
@@ -116,16 +118,24 @@ The plugin comes with a number of commands:
 
 ### Telescope extension
 
-The Telescope extension may be opened via `:Telescope persisted`.
+<!-- panvimdoc-ignore-start -->
 
-Once opened, the available keymaps are:
+<p align="center">
+<img src="https://github.com/olimorris/persisted.nvim/assets/9512444/5bfd6f94-ff70-4f2b-9193-53cdf7140d75" alt="Telescope">
+</p>
 
-- `<CR>` - Source the session file
+<!-- panvimdoc-ignore-end -->
+
+The Telescope extension may be opened via `:Telescope persisted`. The available actions are:
+
+- `<CR>` - Open/source the session file
+- `<C-b>` - Add/update the git branch for the session file
+- `<C-c>` - Copy the session file
 - `<C-d>` - Delete the session file
 
 ### Global variables
 
-The plugin sets global variables which can be utilised in your configuration:
+The plugin sets a number of global variables throughout its lifecycle:
 
 - `vim.g.persisting` - (bool) Determines if the plugin is active for the current session
 - `vim.g.persisted_exists` - (bool) Determines if a session exists for the current working directory
@@ -141,7 +151,8 @@ The plugin comes with the following defaults:
 require("persisted").setup({
   save_dir = vim.fn.expand(vim.fn.stdpath("data") .. "/sessions/"), -- directory where session files are saved
   silent = false, -- silent nvim message when sourcing session file
-  use_git_branch = false, -- create session files based on the branch of the git enabled repository
+  use_git_branch = false, -- create session files based on the branch of a git enabled repository
+  default_branch = "main", -- the branch to load if a session file is not found for the current branch
   autosave = true, -- automatically save session files when exiting Neovim
   should_autosave = nil, -- function to determine if a session should be autosaved
   autoload = false, -- automatically load the session for the cwd on Neovim startup
@@ -149,8 +160,8 @@ require("persisted").setup({
   follow_cwd = true, -- change session file name to match current working directory if it changes
   allowed_dirs = nil, -- table of dirs that the plugin will auto-save and auto-load from
   ignored_dirs = nil, -- table of dirs that are ignored when auto-saving and auto-loading
-  telescope = { -- options for the telescope extension
-    reset_prompt_after_deletion = true, -- whether to reset prompt after session deleted
+  telescope = {
+    reset_prompt = true, -- Reset the Telescope prompt after an action?
   },
 })
 ```
@@ -160,7 +171,7 @@ require("persisted").setup({
 As the plugin uses Vim's `:mksession` command then you may change the `vim.o.sessionoptions` value to determine what to write into the session. Please see `:h sessionoptions` for more information.
 
 > **Note**: The author uses:
-> `vim.o.sessionoptions = "buffers,curdir,folds,globals,tabpages,winpos,winsize"`
+> `vim.o.sessionoptions = "buffers,curdir,folds,tabpages,winpos,winsize"`
 
 ### Session save location
 
@@ -183,10 +194,6 @@ require("persisted").setup({
   use_git_branch = true,
 })
 ```
-
-> **Note**: If git branching is enabled on a non git enabled repo, then `main` will be used as the default branch
-
-If you switch branches in a repository, the plugin will try to load a session which corresponds to that branch. If it can't find one, then it will load the session from the `main` branch.
 
 ### Autosaving
 
@@ -241,7 +248,7 @@ require("persisted").setup({
 
 Autoloading can be further controlled for certain directories by specifying `allowed_dirs` and `ignored_dirs`.
 
-> **Note**: Autoloading will not occur if a user opens Neovim with arguments. For example: `nvim some_file.rb`
+> **Note**: Autoloading will not occur if the plugin is lazy loaded or a user opens Neovim with arguments other than a single directory argument. For example: `nvim some_file.rb` will not result in autoloading but `nvim some/existing/path` or `nvim .` will.
 
 ### Following current working directory
 
@@ -306,7 +313,7 @@ In this setup, `~/.config` and `~/.local/nvim` are still going to behave in thei
 
 ### Events / Callbacks
 
-The plugin fires events at various points during its lifecycle which users can hook into:
+The plugin fires events at various points during its lifecycle:
 
 - `PersistedLoadPre` - For _before_ a session is loaded
 - `PersistedLoadPost` - For _after_ a session is loaded
@@ -319,21 +326,11 @@ The plugin fires events at various points during its lifecycle which users can h
 - `PersistedStateChange` - For when a session is _started_ or _stopped_
 - `PersistedToggled` - For when a session is toggled
 
-For example, to ensure that the excellent [minimap](https://github.com/wfxr/minimap.vim) plugin is not saved into a session, an autocmd can be created to hook into the `PersistedSavePre` event:
+These events can be consumed anywhere within your configuration by utilising the `vim.api.nvim_create_autocmd` function.
 
-```lua
-local group = vim.api.nvim_create_augroup("PersistedHooks", {})
+#### Example use case
 
-vim.api.nvim_create_autocmd({ "User" }, {
-  pattern = "PersistedSavePre",
-  group = group,
-  callback = function()
-    pcall(vim.cmd, "bw minimap")
-  end,
-})
-```
-
-Another and more commonly requested example is to use the Telescope extension to load a session, saving the current session before clearing all of the open buffers. This can be achieved by utilising some of the session data that is made available to the callbacks:
+A commonly requested example is to use the Telescope extension to load a session, saving the current session before clearing all of the open buffers:
 
 ```lua
 local group = vim.api.nvim_create_augroup("PersistedHooks", {})
@@ -342,7 +339,7 @@ vim.api.nvim_create_autocmd({ "User" }, {
   pattern = "PersistedTelescopeLoadPre",
   group = group,
   callback = function(session)
-    -- Save the currently loaded session
+    -- Save the currently loaded session using a global variable
     require("persisted").save({ session = vim.g.persisted_loaded_session })
 
     -- Delete all of the open buffers
@@ -351,19 +348,32 @@ vim.api.nvim_create_autocmd({ "User" }, {
 })
 ```
 
-The session data available differs depending on the events that are hooked into. For non-telescope events, only the session's full path is available (via `session.data`). However for telescope events, the `branch`, `name`, `file_path` and `dir_path` are available.
+#### Using callback data
 
-### Telescope extension
+When certain events are fired, session data is made available for the user to consume, for example:
 
-<!-- panvimdoc-ignore-start -->
+```lua
+{
+  branch = "main",
+  dir_path = "Code/Neovim/persisted.nvim",
+  file_path = "/Users/Oli/.local/share/nvim/sessions/%Users%Oli%Code%Neovim%persisted.nvim@@main.vim",
+  name = "Code/Neovim/persisted.nvim@@main",
+}
+```
 
-<p align="center">
-<img src="https://user-images.githubusercontent.com/9512444/177375482-3bc9bd0d-42c8-4755-a36c-08ea5f954525.png" alt="Telescope">
-</p>
+To consume this data, use the `session.data` table in your autocmd:
 
-<!-- panvimdoc-ignore-end -->
+```lua
+vim.api.nvim_create_autocmd({ "User" }, {
+  pattern = "PersistedLoadPost",
+  group = group,
+  callback = function(session)
+    print(session.data.branch)
+  end,
+})
+```
 
-The plugin contains an extension for [telescope.nvim](https://github.com/nvim-telescope/telescope.nvim) which allows the user to list all of the saved session files and source them via `:Telescope persisted`.
+> **Note**: This data is available for the `PersistedLoad`, `PersistedDelete` and `PersistedTelescope` events
 
 ## :page_with_curl: License
 

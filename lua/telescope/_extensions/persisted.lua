@@ -21,12 +21,21 @@ local function search_sessions(opts)
         local refresh_sessions = function()
           local picker = action_state.get_current_picker(prompt_bufnr)
           picker:refresh(_finders.session_finder(require("persisted").list()), {
-            reset_prompt = config.telescope.reset_prompt_after_deletion,
+            -- INFO: Account for users who are still using the old API
+            reset_prompt = config.telescope.reset_prompt or config.telescope.reset_prompt_after_deletion,
           })
         end
 
+        _actions.change_branch:enhance({ post = refresh_sessions })
+        _actions.copy_session:enhance({ post = refresh_sessions })
         _actions.delete_session:enhance({ post = refresh_sessions })
 
+        map("i", "<c-b>", function()
+          return _actions.change_branch(config)
+        end)
+        map("i", "<c-c>", function()
+          return _actions.copy_session(config)
+        end)
         map("i", "<c-d>", _actions.delete_session)
 
         actions.select_default:replace(function()
